@@ -32,5 +32,5 @@ for number, item in enumerate(items):
 
     lenta.insert_one(drone)
 
-
-print(lenta.count_documents({}))
+for doc in lenta.find():
+    print(doc)
