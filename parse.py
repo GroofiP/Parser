@@ -1,36 +1,40 @@
-from lxml import html
-import requests
+import time
 from pprint import pprint
 
 from pymongo import MongoClient
+from selenium import webdriver
+from selenium.common.exceptions import ElementNotInteractableException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 
-url = 'https://lenta.ru/'
+client = MongoClient("127.0.0.1", 27017)["Mvideo"]
+mvideo = client.mvideo
 
-headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                         '(KHTML, like Gecko) Chrome/97.0.4692.71 Safari/537.36'}
+driver = webdriver.Firefox()
 
-client = MongoClient("127.0.0.1", 27017)["Lenta"]
-lenta = client.lenta
+driver.get('https://www.mvideo.ru/')
 
-response = requests.get(url, headers=headers)
-dom = html.fromstring(response.text)
+elem = driver.find_element(By.CLASS_NAME, "text")
 
-items = dom.xpath("//div[@class='card-big _topnews _news'] | //a[@class='card-mini _topnews']")
-print(len(items))
-for number, item in enumerate(items):
-    drone = {}
-    name = item.xpath(".//text()")
-    link = item.xpath("./@href")
-    time = item.xpath(".//time/text()")
-    data = f"{'-'.join(link[0].split('/')[2:5])} {time[0]}"
+for _ in range(3):
+    elem.send_keys(Keys.PAGE_DOWN)
 
-    drone["_id"] = number
-    drone['name'] = name[0]
-    drone['link'] = f"{url}{link[0]}"
-    drone['data'] = data
-    drone['source'] = "lenta.ru"
+time.sleep(5)
 
-    lenta.insert_one(drone)
+button = driver.find_element(By.XPATH, "//button[@class='tab-button ng-star-inserted']")
+button.click()
+elem = driver.find_element(By.XPATH, "//mvid-carousel[@class='carusel ng-star-inserted']//mvid-product-cards-group")
+items_name = elem.find_elements(By.XPATH, "./div[@class='product-mini-card__name ng-star-inserted']")
+items_price = elem.find_elements(By.XPATH, "./div[@class='product-mini-card__price ng-star-inserted']")
+items_rating = elem.find_elements(By.XPATH, "./div[@class='product-mini-card__rating ng-star-inserted']")
 
-for doc in lenta.find():
+
+for _ in range(0, len(items_name) - 1):
+    name = items_name[_].find_element(By.XPATH, "./div/a/div").text
+    link = items_name[_].find_element(By.XPATH, ".//a").get_attribute("href")
+    price = items_price[_].find_element(By.CLASS_NAME, "price__main-value").text
+    rating = items_rating[_].find_element(By.CLASS_NAME, "value").text
+    mvideo.insert_one({"name": name, "link": link, "price": price, "rating": rating})
+
+for doc in mvideo.find():
     print(doc)
