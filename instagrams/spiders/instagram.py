@@ -17,7 +17,7 @@ class InstagramSpider(scrapy.Spider):
     inst_login = 'Onliskill_udm'
     inst_passw = '#PWD_INSTAGRAM_BROWSER:10:1643131213:AZZQAGTPs6xfu+lt7ppOoFuIqKbWrZ4VaEX53g+SZCn8PJlFrepy7g4RoBJ9hG8g+yNb2R3TWGMrJek2u4SWHgpXYJPp7CijVJirea6j+tAGshfXR9HonVrpXtM9HF0oH+v2RlGNdeDqkBSgLuKb'
     user_for_pase = ['spxtech333', "asep_ramdan455"]
-    graphql_url = 'https://www.instagram.com/graphql/query/?'
+    url_api = 'https://i.instagram.com/api/v1/friendships/'
     posts_hash = '8c2a529969ee035a5063f2fc8602a0fd'
 
     def parse(self, response: HtmlResponse):
@@ -34,44 +34,53 @@ class InstagramSpider(scrapy.Spider):
         j_data = response.json()
         if j_data['authenticated']:
             for item in self.user_for_pase:
+                print(item)
                 yield response.follow(f'/{item}',
                                       callback=self.user_parse,
-                                      cb_kwargs={'username': item})
+                                      cb_kwargs={'username': item,
+                                                 "follows": [{"followers": "max_id", "following": "next_max_id"}]})
 
-    def user_parse(self, response: HtmlResponse, username):
+    def user_parse(self, response: HtmlResponse, username, follows):
         user_id = self.fetch_user_id(response.text, username)
-        variables = {'id': user_id,
-                     'first': 12}
-        url = f'{self.graphql_url}query_hash={self.posts_hash}&{urlencode(variables)}'
+        for follow_items in follows:
+            for follow_item, key in follow_items.items():
+                variables = {'id': user_id,
+                             'count': 12,
+                             f"{key}": 12,
+                             "search_surface": "follow_list_page"}
+                url = f'{self.url_api}{variables["id"]}/{follow_item}/?{urlencode(variables)}'
 
-        yield response.follow(url,
-                              callback=self.user_posts_parse,
-                              cb_kwargs={'username': username,
-                                         'user_id': user_id,
-                                         'variables': deepcopy(variables)})
+                yield response.follow(url,
+                                      callback=self.user_posts_parse,
+                                      cb_kwargs={'username': username,
+                                                 'user_id': user_id,
+                                                 'follow_item': follow_item,
+                                                 'key': key,
+                                                 'variables': deepcopy(variables)})
 
-    def user_posts_parse(self, response: HtmlResponse, username, user_id, variables):
+    def user_posts_parse(self, response: HtmlResponse, username, user_id, follow_item, key, variables):
         j_data = response.json()
-        page_info = j_data.get('data').get('user').get('edge_owner_to_timeline_media').get('page_info')
-        if page_info.get('has_next_page'):
-            variables['after'] = page_info.get('end_cursor')
+        if j_data.get('big_list'):
+            variables[key] += variables['count']
 
-            url = f'{self.graphql_url}query_hash={self.posts_hash}&{urlencode(variables)}'
+            url = f'{self.url_api}{variables["id"]}/{follow_item}/?{urlencode(variables)}'
 
             yield response.follow(url,
                                   callback=self.user_posts_parse,
                                   cb_kwargs={'username': username,
                                              'user_id': user_id,
+                                             'follow_item': follow_item,
+                                             'key': key,
                                              'variables': deepcopy(variables)})
 
-        posts = j_data.get('data').get('user').get('edge_owner_to_timeline_media').get('edges')
+        posts = j_data.get('users')
+
         for post in posts:
             item = InstagramsItem(
-                user_id=user_id,
-                username=username,
-                photo=post.get('node').get('display_url'),
-                likes=post.get('node').get('edge_media_preview_like').get('count'),
-                post_data=post.get('node')
+                _id=int(post.get("pk")),
+                username=post.get("username"),
+                photo=post.get('profile_pic_url'),
+                follow=follow_item
             )
             yield item
 

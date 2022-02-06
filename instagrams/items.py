@@ -7,8 +7,7 @@ import scrapy
 
 
 class InstagramsItem(scrapy.Item):
-    user_id = scrapy.Field()
+    _id = scrapy.Field()
     username = scrapy.Field()
     photo = scrapy.Field()
-    likes = scrapy.Field()
-    post_data = scrapy.Field()
+    follow = scrapy.Field()

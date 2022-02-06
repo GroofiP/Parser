@@ -6,8 +6,15 @@
 
 # useful for handling different item types with a single interface
 from itemadapter import ItemAdapter
+from pymongo import MongoClient
 
 
 class InstagramsPipeline:
+    def __init__(self):
+        client = MongoClient('127.0.0.1', 27017)
+        self.mongo_base = client.inst
+
     def process_item(self, item, spider):
+        collection = self.mongo_base[spider.name]
+        collection.insert_one(item)
         return item
